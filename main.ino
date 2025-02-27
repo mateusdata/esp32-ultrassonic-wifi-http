@@ -1,74 +1,69 @@
 #include "WiFi.h"
 #include "HTTPClient.h"
 
-// Definições do sensor ultrassônico
+
 #define trigPin 26  // Pino Trig no GPIO 26
 #define echoPin 27  // Pino Echo no GPIO 27
 #define soundSpeed 0.034029  // Velocidade do som em cm/µs
 
-// Definições da rede Wi-Fi
-const char* ssid = "REDE_2G";      // Nome da rede Wi-Fi
-const char* password = "20152015@@";  // Senha da rede
+const char* ssid = "REDE_2G";     
+const char* password = "20152015@@"; 
+
+const char* esp32Key = "my-key-secret"; 
 
 float dist;
 
 void setup() {
-  Serial.begin(9600);  // Inicia a comunicação serial a 9600 bps
+  Serial.begin(9600);
 
-  // Configurações dos pinos do sensor ultrassônico
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
-  // Conexão com a rede Wi-Fi
-  WiFi.mode(WIFI_STA);  // Define o modo estação (client)
-  WiFi.begin(ssid, password);  // Conecta à rede Wi-Fi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
 
   Serial.print("Conectando à ");
   Serial.println(ssid);
 
-  // Aguarda até conectar
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
   }
 
   Serial.println("\nWi-Fi conectado!");
-  Serial.print("Endereço IP: ");
-  Serial.println(WiFi.localIP()); // Mostra o IP obtido na rede
+  Serial.print("Endereço IP do ESP32: ");
+  Serial.println(WiFi.localIP());
 }
 
 void loop() {
-  dist = distanceTo();  // Chama a função para medir a distância
+  dist = distanceTo();
 
-  // Se a distância for maior que 50 cm, faz a requisição HTTP
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("Wi-Fi está CONECTADO");
-  }
-  if (dist > 100) {
-    sendHTTPRequest();
+    if (dist > 50) {
+      sendHTTPRequest();
+    }
+  } else {
+    Serial.println("Wi-Fi DESCONECTADO");
+    WiFi.reconnect();
   }
 
-  delay(200);  // Delay para evitar leituras rápidas demais
+  delay(30000);
 }
 
-// Função para medir a distância
 float distanceTo() {
   unsigned long duration;
   float distance;
 
-  // Envia o pulso para o sensor ultrassônico
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin, HIGH);
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
 
-  duration = pulseIn(echoPin, HIGH);  // Mede o tempo do pulso
-
-  // Calcula a distância em cm
+  duration = pulseIn(echoPin, HIGH);
   distance = (duration * soundSpeed) / 2;
 
-  // Exibe a distância no Monitor Serial
   Serial.print("Distância: ");
   Serial.print(distance);
   Serial.println(" cm");
@@ -76,32 +71,40 @@ float distanceTo() {
   return distance;
 }
 
-// Função para enviar a requisição HTTP
 void sendHTTPRequest() {
-  
   HTTPClient http;
 
-  // Define o URL para a requisição
-  http.begin("https://api-pink-eta.vercel.app/notifications");
+  String url = "your_api/notifications";
+  Serial.print("Tentando POST para: ");
+  Serial.println(url);
 
-  // Faz a requisição GET
-  int httpCode = http.GET();
+  if (http.begin(url)) {
+    Serial.println("Conexão iniciada com sucesso");
 
-  if (httpCode > 0) {
-    // Se a requisição for bem-sucedida, imprime o código HTTP
-    Serial.printf("Código HTTP: %d\n", httpCode);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("esp32Key", esp32Key);  
 
-    // Obtém o conteúdo da resposta
-    String payload = http.getString();
-    
-    // Imprime a resposta JSON
-    Serial.println("Resposta JSON:");
-    Serial.println(payload);
+    String jsonPayload = "{\"level\": " + String(dist) + "}";
+    Serial.print("Enviando JSON: ");
+    Serial.println(jsonPayload);
+    Serial.print("Header esp32Key: ");
+    Serial.println(esp32Key);
+
+    int httpCode = http.POST(jsonPayload);
+
+    if (httpCode > 0) {
+      Serial.printf("Código HTTP: %d\n", httpCode);
+      String payload = http.getString();
+      Serial.println("Resposta do servidor:");
+      Serial.println(payload);
+    } else {
+      Serial.print("Erro na requisição: ");
+      Serial.println(http.errorToString(httpCode));
+    }
   } else {
-    // Se houver erro na requisição, imprime o código de erro
-    Serial.printf("Erro na requisição HTTP: %d\n", httpCode);
+    Serial.println("Falha ao iniciar conexão com o servidor");
   }
 
-  // Libera os recursos utilizados pela requisição
   http.end();
+  Serial.println("Requisição finalizada");
 }
