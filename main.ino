@@ -48,7 +48,7 @@ void loop() {
     sendHTTPRequest();
   }
 
-  delay(1000);  // Delay para evitar leituras rápidas demais
+  delay(200);  // Delay para evitar leituras rápidas demais
 }
 
 // Função para medir a distância
